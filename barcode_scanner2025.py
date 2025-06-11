@@ -41,10 +41,10 @@ def getData():
     
 		try:
 			with open("data.json", "r") as f:
-				d = json.load(f)
+				json_f = json.load(f)
 			return json_f
 		except (FileNotFoundError, json.JSONDecodeError):
-
+			print("JSON file not found. Generating from data files...")
 			return False
 
 	def find_conf():
@@ -105,9 +105,9 @@ def process(index, filename, f_ex):
 	try:
 		print(filename)
 		if (f_ex == 'pdf'):
-			doc = convert_from_path(filename, dpi=300, poppler_path=POPPLER_PATH)[0]
+			doc = convert_from_path(filename, dpi=600, poppler_path=POPPLER_PATH)
 		elif (f_ex == 'tif'):
-			doc = Image.open(filename).convert('RGB')
+			doc = [Image.open(filename).convert('RGB')]
 	except Exception as e:
 		
 		print(e)
@@ -122,22 +122,27 @@ def process(index, filename, f_ex):
 		return index-1
 	else:
 		print('Scanning...')
-		if resample(doc):
-			print("Removed {}".format(filename))
-			os.remove(filename)
-			return index-1
-		else:
-			print("Could not save file. Keeping original.")
-			ind = 1
-			try:
+
+		doc_len = len(doc)
+		page_num = 1
+
+		while len(doc) > 0:
+			
+			page = doc.pop(0)
+			if resample(page):
+				print(f"Scanned {page_num} of {doc_len} pages.")
+				page_num += 1
+
+			else:
+				print("Could not read page. Sending to review folder.")
+				
 				fn = filename.split("\\")[-1][:-4]
 				f_ext = filename.split("\\")[-1][-4:]
-				os.rename(filename, "%s\\%s%s" % (DATA['failed'], fn, f_ext))
-			except FileExistsError:
-				while os.path.isfile("%s\\%s(%i)%s" % (DATA['failed'], fn, ind, f_ext)):
-					ind += 1
-				os.rename(filename, "%s\\%s(%i)%s" % (DATA['failed'], fn, ind, f_ext))
-			return index-1
+				indexSave(page, f"{DATA['failed']}\\{fn} ({page_num}){f_ext}")
+
+		print("Removed {}".format(filename))
+		os.remove(filename)
+		return index-1
 
 def resample(d):
     
@@ -193,7 +198,7 @@ def indexSave(f, path):
 		else:
 			while os.path.isfile("%s%i.pdf" % (path, i)):
 				i += 1
-		f.save("%s%i.pdf" % (path, i), 'PDF')
+			f.save("%s%i.pdf" % (path, i), 'PDF')
 	except:
 		print("Could not save file.")
 		f.close()
@@ -203,7 +208,7 @@ def indexSave(f, path):
 		return True
 
 def createFolder(path):
-	print(path)
+
 	if not os.path.isdir(path):
 		os.makedirs(path)
 
@@ -219,7 +224,7 @@ def saveReq(c, m, p):
 		else:
 			name = re.sub(r'\W', '_', m[0].data.decode('utf-8'))
 			try:
-				return indexSave(p, "%s\\UNLABELED_%s_" % (DATA['failed'], name))
+				return indexSave(p, "%s\\UNLABELED_%s" % (DATA['failed'], name))
 			except:
 				return indexSave(p, "%s\\UNLABELED" % DATA['failed'])
                 
@@ -262,19 +267,15 @@ if (DATA == False):
 
 ind = 12000
 POPPLER_PATH = f"{CWD}\\poppler\\Library\\bin"
-print(POPPLER_PATH)
 createFolder(DATA['failed'])
 
 pdfs = glob.glob('%s\*.pdf' % DATA['to_process'])
 tifs = glob.glob('%s\*.tif' % DATA['to_process'])
-print(DATA['to_process'])
 
 while ind > 0:
 	if pdfs:
-		print("are pdfs")
 		ind = process(ind, pdfs.pop(), 'pdf')
 	elif tifs:
-		print("are tifs")
 		ind = process(ind, tifs.pop(), 'tif')
 	else:
 		break
