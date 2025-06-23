@@ -40,11 +40,14 @@ def getData():
 		json_f = {}
     
 		try:
-			with open("data.json", "r") as f:
+			with open(f"{CWD}\\data.json", "r") as f:
 				json_f = json.load(f)
 			return json_f
-		except (FileNotFoundError, json.JSONDecodeError):
+		except FileNotFoundError:
 			print("JSON file not found. Generating from data files...")
+			return False
+		except json.JSONDecodeError:
+			print("JSON issue")
 			return False
 
 	def find_conf():
@@ -105,7 +108,7 @@ def process(index, filename, f_ex):
 	try:
 		print(filename)
 		if (f_ex == 'pdf'):
-			doc = convert_from_path(filename, dpi=600, poppler_path=POPPLER_PATH)
+			doc = convert_from_path(filename, dpi=300, poppler_path=POPPLER_PATH)
 		elif (f_ex == 'tif'):
 			doc = [Image.open(filename).convert('RGB')]
 	except Exception as e:
@@ -122,17 +125,17 @@ def process(index, filename, f_ex):
 		return index-1
 	else:
 		print('Scanning...')
-
 		doc_len = len(doc)
 		page_num = 1
 
 		while len(doc) > 0:
 			
 			page = doc.pop(0)
+			#page.show()
 			if resample(page):
 				print(f"Scanned {page_num} of {doc_len} pages.")
 				page_num += 1
-
+				page.close()
 			else:
 				print("Could not read page. Sending to review folder.")
 				
@@ -157,6 +160,7 @@ def resample(d):
 
 	for page in pages:
 		page.close()
+	del pages
 
 	return analyze(scans, p)
 
@@ -251,6 +255,7 @@ def saveReq(c, m, p):
 				size = multi_page[0].size
 				multi_page = [page.resize(size, resample=0) for page in multi_page]
 				p.save("%s\\%s\\%s.pdf" % (DATA['success'], case_type, case_num), 'PDF', save_all=True, append_images=multi_page)
+				for page in multi_page: page.close()
 		except Exception as e:
 			print(e)
 			return False
@@ -271,6 +276,8 @@ createFolder(DATA['failed'])
 
 pdfs = glob.glob('%s\*.pdf' % DATA['to_process'])
 tifs = glob.glob('%s\*.tif' % DATA['to_process'])
+
+print(DATA)
 
 while ind > 0:
 	if pdfs:
